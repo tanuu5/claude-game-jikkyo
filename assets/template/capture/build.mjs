@@ -5,7 +5,7 @@
 // edit.json の形（フレーム番号は録画 play.mp4 のコマ番号。秒は出来上がりの動画の秒）:
 // {
 //   "voice": { "speaker": 8, "speed": 1.12 },
-//   "cuts": [ { "from": 0, "to": 900 }, { "from": 900, "to": 3600, "speed": 4 }, { "from": 2400, "to": 2520, "speed": 0.5, "label": "REPLAY" } ],
+//   "cuts": [ { "src": "<別の run 名>", "from": 100, "to": 400, "label": "前回のあらすじ" }, { "from": 0, "to": 900 }, { "from": 900, "to": 3600, "speed": 4 }, { "from": 2400, "to": 2520, "speed": 0.5, "label": "REPLAY" } ],
 //   "lines": [ { "at": 30, "text": "こんにちは" }, { "at": 1200, "cut": 2, "text": "…", "delay": 0.2 } ],
 //   "fx": [ { "at": 1500, "type": "zoom", "scale": 1.5, "center": [960, 600], "dur": 1.6 },
 //           { "at": 1500, "type": "lines", "dur": 1.2 }, { "at": 1500, "type": "shake", "dur": 0.5 },
@@ -35,7 +35,8 @@ const CPS = 6.8; // 1 秒あたりの文字数のめやす（春日部つむぎ�
 const cuts = (E.cuts && E.cuts.length ? E.cuts : [{ from: 0, to: S.totalFrames }]).map((c) => ({ speed: 1, ...c }));
 let acc = 0;
 for (const c of cuts) {
-  c.to = Math.min(c.to, S.totalFrames);
+  const total = c.src ? JSON.parse(readFileSync(join(ROOT, 'runs', c.src, 'session.json'), 'utf8')).totalFrames : S.totalFrames;
+  c.to = Math.min(c.to, total);
   c.start = acc;
   c.len = (c.to - c.from) / FPS / c.speed;
   acc += c.len;
@@ -43,7 +44,8 @@ for (const c of cuts) {
 const DUR = acc;
 function outTime(o, what) {
   if (o.t != null) return o.t;
-  const list = o.cut != null ? [cuts[o.cut]] : cuts;
+  // src を付けたカット（前回の録画など）は、同じ src を指定した lines / fx だけが参照する
+  const list = o.cut != null ? [cuts[o.cut]] : cuts.filter((c) => (c.src || null) === (o.src || null));
   for (const c of list) if (o.at >= c.from && o.at < c.to) return c.start + (o.at - c.from) / FPS / c.speed;
   throw new Error(`${what}: コマ ${o.at} はどのカットにも入っていません`);
 }
@@ -107,7 +109,7 @@ async function gfx(style, text) {
   await page.screenshot({ path: f, omitBackground: true });
   return f;
 }
-const plan = { width: W, height: H, fps: FPS, duration: DUR, preview: PREVIEW, source: join(RUN, 'play.mp4'), gameAudio: existsSync(join(RUN, 'game_audio.wav')) ? join(RUN, 'game_audio.wav') : null,
+const plan = { width: W, height: H, fps: FPS, duration: DUR, preview: PREVIEW, source: join(RUN, 'play.mp4'), runs: join(ROOT, 'runs'), gameAudio: existsSync(join(RUN, 'game_audio.wav')) ? join(RUN, 'game_audio.wav') : null,
   cuts, overlays: [], zooms: [], shakes: [], speedlines: [], voices: lines.map((l) => ({ file: l.file, start: l.start })), sfx: [], audio: { gain: 0.9, duck: 0.4, fast: 0, ...(E.game_audio || {}) },
   out: join(RUN, 'out', `${GAME}_jikkyo${PREVIEW ? '_preview' : ''}.mp4`) };
 // 字幕は画面の下（y = 中心 1012 あたり）。

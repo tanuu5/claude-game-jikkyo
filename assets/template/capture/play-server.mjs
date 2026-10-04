@@ -4,7 +4,9 @@
 // 進んだコマはすべて録画される。考えている間はゲームの時間が進まないので、つないだ映像は普通に遊んでいるように見える。
 // ゲームの音（Web Audio）も vaudio.js で同じ時計に合わせて書き出す。
 //
-//   node capture/play-server.mjs <game> [--port 5190]
+//   node capture/play-server.mjs <game> [--port 5190] [--run <name>] [--restore <storage.json>]
+//     --run      録画の置き場所 runs/<name>（続き物は last-courier-2 のように分ける。既定は <game>）
+//     --restore  前回の /quit で保存した localStorage（セーブ）を読み込んでから始める
 //   curl -s localhost:5190/act -d '{"memo":"…","steps":[{"hold":["KeyW"],"sec":2}]}'
 //   curl -s localhost:5190/quit        → runs/<game>/play.mp4, game_audio.wav, session.json
 //
@@ -37,7 +39,7 @@ const GAME = process.argv[2];
 if (!GAME) { console.error('usage: node capture/play-server.mjs <game>'); process.exit(1); }
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const A = (await import(pathToFileURL(join(ROOT, 'adapters', `${GAME}.mjs`)).href)).default;
-const RUN = join(ROOT, 'runs', GAME);
+const RUN = join(ROOT, 'runs', arg('run', GAME));
 const FOOT = join(RUN, 'footage');
 if (existsSync(FOOT) && !process.argv.includes('--keep')) rmSync(FOOT, { recursive: true });
 for (const d of [FOOT, join(RUN, 'snaps'), join(RUN, 'live')]) mkdirSync(d, { recursive: true });
@@ -85,6 +87,11 @@ if (A.audio !== false) {
   await page.evaluateOnNewDocument(readFileSync(join(CAP, 'vaudio.js'), 'utf8'));
 }
 if (A.init) await page.evaluateOnNewDocument(A.init);
+// 続きから撮る：アダプタの初期化（セーブ消去など）のあとで、保存しておいた localStorage を戻す
+if (arg('restore')) {
+  const saved = JSON.parse(readFileSync(arg('restore'), 'utf8'));
+  await page.evaluateOnNewDocument((kv) => { try { for (const [k, v] of Object.entries(kv)) localStorage.setItem(k, v); } catch {} }, saved);
+}
 page.on('pageerror', (e) => console.log('[page error]', String(e.message).slice(0, 300)));
 page.on('console', (m) => { if (m.type() === 'error') console.log('[page]', m.text().slice(0, 300)); });
 const client = await page.createCDPSession();
@@ -247,6 +254,9 @@ async function act(body) {
 }
 
 async function quit() {
+  // セーブ（localStorage）を残しておく：次回 --restore で続きから撮れる
+  const storage = await page.evaluate(() => { const o = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); o[k] = localStorage.getItem(k); } } catch {} return o; });
+  writeFileSync(join(RUN, 'storage.json'), JSON.stringify(storage));
   // 録画をつなぐ
   const segs = readdirSync(FOOT).filter((f) => /^seg\d+\.mp4$/.test(f)).sort();
   writeFileSync(join(RUN, 'concat.txt'), segs.map((f) => `file '${join(FOOT, f)}'`).join('\n'));

@@ -65,6 +65,8 @@ curl -s localhost:5190/quit                  # 録画をつなぎ、ゲームの
 - 反射神経が要る操作（バランス取りなど）は、アダプタの補助（LAST COURIER の `grip:"auto"`）を使ってよい。使ったことは最後にユーザーへ伝える。
 - 録画は 1 コマ約 50ms。4 分の素材で 15〜20 分ほど。1 本の目安は素材 3〜5 分 → 編集後 2〜3 分。
 
+**続き物（シリーズ）にするとき**：/quit のたびにゲームのセーブ（localStorage）が `runs/<run>/storage.json` に残る。次の回は `node capture/play-server.mjs <game> --run <game>-2 --restore runs/<game>/storage.json` で、続きから撮れる（録画は別の run に分かれる）。前回のセーブがない、または区切りのよい状態から始めたいときは、短い準備用の run でゲームの関数を呼んで状態を作り、その storage.json を使う。冒頭の「前回のあらすじ」は、edit.json のカットに `"src": "<前回の run>"` を付けると前回の録画から取れる（`references/editing.md`）。
+
 ### 4. 台本を書く（`runs/<game>/edit.json`）
 
 ```bash

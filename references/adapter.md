@@ -54,6 +54,13 @@ export default {
 - `status` は画面に出ている情報の範囲にする。目的地の方位と距離はコンパスやマーカーで見えるなら渡してよい。隠れたものの座標は渡さない。
 - `events` は編集の目印になる（転倒、納品、雨の始まり、モードの切り替え）。前回値との差で出す。
 
+## 起動オプション
+
+`node capture/play-server.mjs <game> [--port 5190] [--run <name>] [--restore <storage.json>]`
+
+- `--run`：録画の置き場所 `runs/<name>`。続き物や撮り直しを分ける（既定は `<game>`）。
+- `--restore`：前回 /quit で保存された localStorage（ゲームのセーブ）を、アダプタの `init` のあとで戻してから始める。
+
 ## /act の本文
 
 | キー | 意味 |

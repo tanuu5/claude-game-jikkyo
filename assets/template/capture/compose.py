@@ -5,7 +5,7 @@
   ズーム（パンチイン）・画面揺れ・集中線・テロップ・字幕を重ねて ffmpeg に渡す。
 音：ゲームの音（カットに合わせて切り貼り、セリフの下では下げる）＋セリフ＋効果音（ここで合成）。
 """
-import json, math, subprocess, sys, wave
+import json, math, os, subprocess, sys, wave
 import numpy as np
 from PIL import Image, ImageDraw
 from scipy.signal import resample_poly
@@ -126,11 +126,20 @@ def mix_audio():
     n = int(DUR * SR) + SR
     game = np.zeros((n, 2), np.float32)
     A = P['audio']
-    if P.get('gameAudio'):
-        w = wave.open(P['gameAudio'])
-        src = np.frombuffer(w.readframes(w.getnframes()), np.int16).reshape(-1, 2).astype(np.float32) / 32768
+    def load_audio(path):
+        w = wave.open(path)
+        return np.frombuffer(w.readframes(w.getnframes()), np.int16).reshape(-1, 2).astype(np.float32) / 32768
+    audio_cache = {}
+    def audio_for(c):  # カットごとの音源（src を付けたカットは、その run のゲーム音）
+        path = os.path.join(P['runs'], c['src'], 'game_audio.wav') if c.get('src') else P.get('gameAudio')
+        if not path or not os.path.exists(path): return None
+        if path not in audio_cache: audio_cache[path] = load_audio(path)
+        return audio_cache[path]
+    if True:
         fade = int(0.02 * SR)
         for c in P['cuts']:
+            src = audio_for(c)
+            if src is None: continue
             i0 = int(round(c['start'] * SR)); L = int(round(c['len'] * SR))
             s0, s1 = int(c['from'] / FPS * SR), int(c['to'] / FPS * SR)
             seg = src[s0:s1]
@@ -201,7 +210,7 @@ for ci, c in enumerate(P['cuts']):
     k0, k1 = int(round(c['start'] * FPS)), min(NOUT, int(round((c['start'] + c['len']) * FPS)))
     if k1 <= k0: continue
     n_src = c['to'] - c['from']
-    args = ['ffmpeg', '-loglevel', 'error', '-ss', f"{(c['from'] - 0.25) / FPS:.5f}", '-i', P['source'], '-frames:v', str(n_src)]
+    args = ['ffmpeg', '-loglevel', 'error', '-ss', f"{(c['from'] - 0.25) / FPS:.5f}", '-i', os.path.join(P['runs'], c['src'], 'play.mp4') if c.get('src') else P['source'], '-frames:v', str(n_src)]
     if SCALE != 1: args += ['-vf', f'scale={W}:{H}:flags=bilinear']
     dec = subprocess.Popen(args + ['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     have, cur = -1, None
@@ -230,6 +239,5 @@ for ci, c in enumerate(P['cuts']):
     print(f'  cut {ci + 1}/{len(P["cuts"])}  {k1 / FPS:6.1f}s / {DUR:.1f}s', flush=True)
 enc.stdin.close()
 enc.wait()
-import os
 os.remove(P['out'] + '.wav')
 print('wrote', P['out'])
