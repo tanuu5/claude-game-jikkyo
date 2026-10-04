@@ -1,0 +1,10 @@
+node_modules/
+games/
+runs/*/footage/
+runs/*/voice/
+runs/*/live/
+runs/*/gfx/
+runs/*/play.mp4
+runs/*/game_audio.wav
+runs/*/out/
+.DS_Store
